@@ -598,7 +598,7 @@ export default function Home() {
           <p className="text-center text-xs text-zinc-500">{missingHint}</p>
         )}
         {error && (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          <p className="whitespace-pre-line rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
             {error}
           </p>
         )}

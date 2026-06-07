@@ -86,13 +86,61 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("[/api/tryon] error:", err);
-    let message = "알 수 없는 오류";
+    let raw = "알 수 없는 오류";
     if (err instanceof Error) {
-      message = err.message;
+      raw = err.message;
     } else if (err && typeof err === "object") {
       const e = err as { message?: string; title?: string };
-      message = e.title && e.message ? `${e.title}: ${e.message}` : (e.message || e.title || JSON.stringify(err).slice(0, 200));
+      raw = e.title && e.message ? `${e.title}: ${e.message}` : (e.message || e.title || JSON.stringify(err).slice(0, 200));
     }
-    return Response.json({ error: message }, { status: 500 });
+    return Response.json({ error: translateError(raw) }, { status: 500 });
   }
+}
+
+function translateError(raw: string): string {
+  // ZeroGPU 할당량 초과
+  const quota = raw.match(/exceeded your free ZeroGPU quota.*?\((\d+)s requested vs\. (\d+)s left\).*?Try again in ([\d:]+)/i);
+  if (quota) {
+    const [, requested, left, remain] = quota;
+    const human = formatRemain(remain);
+    return `무료 ZeroGPU 일일 할당량이 소진되었습니다.\n` +
+      `· 이번 요청에 필요한 시간: ${requested}초\n` +
+      `· 남은 할당량: ${left}초\n` +
+      `· 다시 사용 가능: 약 ${human} 후 (${remain})\n\n` +
+      `해결 방법:\n` +
+      `1) ${human} 후 재시도\n` +
+      `2) 다른 무료 HF 계정으로 새 토큰을 발급해 환경변수 HF_TOKEN 교체`;
+  }
+  // 게이트웨이 타임아웃
+  if (/504|gateway timeout|timeout/i.test(raw)) {
+    return `요청이 시간 초과되었습니다 (서버 응답이 너무 느림).\n잠시 후 다시 시도하거나, 이미지를 더 작게 압축해 보세요.`;
+  }
+  // 요청 본문 크기 초과
+  if (/413|payload too large|request entity too large/i.test(raw)) {
+    return `이미지 용량이 너무 큽니다 (서버 제한 초과).\n더 작은 사진을 사용하거나 다시 촬영해 주세요.`;
+  }
+  // ZeroGPU 워커 오류
+  if (/AcceleratorError|GPU.*?(error|fail)/i.test(raw)) {
+    return `GPU 워커가 일시적으로 작동하지 않습니다 (서버 측 문제).\n수 분 후 다시 시도해 주세요.`;
+  }
+  // 인증 오류
+  if (/401|unauthorized|invalid token/i.test(raw)) {
+    return `Hugging Face 토큰이 유효하지 않습니다.\n환경변수 HF_TOKEN을 확인해 주세요.`;
+  }
+  // Space 미존재/엔드포인트 없음
+  if (/no endpoint|api_name|not found/i.test(raw)) {
+    return `해당 Space의 API 엔드포인트를 찾을 수 없습니다.\nHF_SPACE 설정 또는 Space 상태를 확인해 주세요.`;
+  }
+  return raw;
+}
+
+function formatRemain(hhmmss: string): string {
+  const parts = hhmmss.split(":").map(Number);
+  let h = 0, m = 0;
+  if (parts.length === 3) { [h, m] = parts; }
+  else if (parts.length === 2) { [m] = parts; }
+  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
+  if (h > 0) return `${h}시간`;
+  if (m > 0) return `${m}분`;
+  return "잠시";
 }
