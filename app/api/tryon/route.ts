@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
     }
 
     let current: Blob = person;
-    if (needTop) current = await tryonOnce(current, top as Blob, "upper");
     if (needBottom) current = await tryonOnce(current, bottom as Blob, "lower");
+    if (needTop) current = await tryonOnce(current, top as Blob, "upper");
 
     const buffer = Buffer.from(await current.arrayBuffer());
     return new Response(new Uint8Array(buffer), {
