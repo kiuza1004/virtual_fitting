@@ -258,7 +258,7 @@ function HowToModal({ onClose }: { onClose: () => void }) {
           </li>
           <li>
             <b>본인 사진</b>: 전신이 정면으로 나온 사진이 가장 잘 됩니다. 배경 단순,
-            팔/다리 잘리지 않게. "사진 선택" 또는 "촬영" 버튼 사용.
+            팔/다리 잘리지 않게. 사진 영역을 탭하면 "사진 선택 / 촬영"을 고를 수 있습니다.
           </li>
           <li>
             <b>옷 이미지</b>: 옷만 단독으로 찍힌 사진(쇼핑몰 상세 컷)이 가장 정확합니다.
@@ -308,6 +308,7 @@ function ImagePicker({
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [showChoice, setShowChoice] = useState(false);
 
   useEffect(() => {
     if (!file) {
@@ -318,6 +319,15 @@ function ImagePicker({
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  const pickFile = () => {
+    setShowChoice(false);
+    inputRef.current?.click();
+  };
+  const pickCamera = () => {
+    setShowChoice(false);
+    setShowCamera(true);
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -335,33 +345,28 @@ function ImagePicker({
           </button>
         )}
       </div>
-      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border-2 border-dashed border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+      <button
+        type="button"
+        onClick={() => setShowChoice(true)}
+        aria-label={file ? `${label} 교체` : `${label} 추가`}
+        className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border-2 border-dashed border-zinc-300 bg-white text-left focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:border-zinc-700 dark:bg-zinc-900"
+      >
         {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt={label} className="h-full w-full object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview} alt={label} className="h-full w-full object-cover" />
+            <span className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
+              교체
+            </span>
+          </>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-4 text-center text-sm text-zinc-500">
             <span className="text-2xl">＋</span>
             <span>{hint}</span>
+            <span className="mt-1 text-[11px] text-zinc-400">탭하여 사진 선택 또는 촬영</span>
           </div>
         )}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-        >
-          사진 선택
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowCamera(true)}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-        >
-          촬영
-        </button>
-      </div>
+      </button>
       <input
         ref={inputRef}
         id={`pick-${slot}`}
@@ -370,6 +375,14 @@ function ImagePicker({
         className="hidden"
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
       />
+      {showChoice && (
+        <SourceChoiceDialog
+          label={label}
+          onPickFile={pickFile}
+          onPickCamera={pickCamera}
+          onClose={() => setShowChoice(false)}
+        />
+      )}
       {showCamera && (
         <CameraModal
           facingDefault={facingDefault}
@@ -380,6 +393,57 @@ function ImagePicker({
           onClose={() => setShowCamera(false)}
         />
       )}
+    </div>
+  );
+}
+
+function SourceChoiceDialog({
+  label,
+  onPickFile,
+  onPickCamera,
+  onClose,
+}: {
+  label: string;
+  onPickFile: () => void;
+  onPickCamera: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl dark:bg-zinc-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-3 text-center text-sm font-semibold">{label} 추가</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onPickFile}
+            className="flex flex-col items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-4 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          >
+            <span className="text-2xl">🖼️</span>
+            <span>사진 선택</span>
+          </button>
+          <button
+            type="button"
+            onClick={onPickCamera}
+            className="flex flex-col items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-4 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          >
+            <span className="text-2xl">📷</span>
+            <span>촬영</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-3 w-full rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        >
+          취소
+        </button>
+      </div>
     </div>
   );
 }
