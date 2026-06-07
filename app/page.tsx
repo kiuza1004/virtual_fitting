@@ -32,6 +32,38 @@ const MODE_LABEL: Record<Mode, string> = {
   both: "상하의 모두",
 };
 
+const MAX_DIM = 1280;
+const QUALITY = 0.85;
+const SKIP_COMPRESS_BELOW = 1.5 * 1024 * 1024;
+
+async function compressImage(file: File): Promise<File> {
+  if (file.size < SKIP_COMPRESS_BELOW && /image\/jpe?g/i.test(file.type)) return file;
+  try {
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      img.close?.();
+      return file;
+    }
+    ctx.drawImage(img, 0, 0, w, h);
+    img.close?.();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", QUALITY)
+    );
+    if (!blob) return file;
+    const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], name, { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 function CameraModal({
   facingDefault,
   onCapture,
@@ -387,22 +419,36 @@ export default function Home() {
       setResultBlob(null);
     }
     try {
+      const personC = await compressImage(person);
+      const topC = top ? await compressImage(top) : null;
+      const bottomC = bottom ? await compressImage(bottom) : null;
+
       const form = new FormData();
-      form.set("person", person);
+      form.set("person", personC);
       form.set("mode", mode);
-      if (top && (mode === "top" || mode === "both")) form.set("top", top);
-      if (bottom && (mode === "bottom" || mode === "both")) form.set("bottom", bottom);
+      if (topC && (mode === "top" || mode === "both")) form.set("top", topC);
+      if (bottomC && (mode === "bottom" || mode === "both")) form.set("bottom", bottomC);
 
       const res = await fetch("/api/tryon", { method: "POST", body: form });
+      const ctype = res.headers.get("content-type") || "";
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: "요청 실패" }));
-        throw new Error(data.error ?? `오류 ${res.status}`);
+        let message = `서버 오류 ${res.status}`;
+        if (ctype.includes("application/json")) {
+          const data = await res.json().catch(() => null);
+          if (data?.error) message = data.error;
+        } else if (res.status === 413) {
+          message = "업로드 용량 초과. 더 작은 이미지를 사용하세요.";
+        } else if (res.status === 504 || res.status === 408) {
+          message = "AI 서버 응답 지연 (timeout). 잠시 후 재시도해주세요.";
+        }
+        throw new Error(message);
       }
       const blob = await res.blob();
       setResultBlob(blob);
       setResultUrl(URL.createObjectURL(blob));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "알 수 없는 오류");
+      const msg = e instanceof Error ? e.message : "알 수 없는 오류";
+      setError(msg.includes("Failed to fetch") ? "네트워크 오류 — 모바일 데이터/와이파이 확인" : msg);
     } finally {
       setLoading(false);
     }
