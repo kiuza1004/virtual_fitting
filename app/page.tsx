@@ -508,6 +508,14 @@ export default function Home() {
   const needTop = mode === "top" || mode === "both";
   const needBottom = mode === "bottom" || mode === "both";
 
+  const missingHint = useMemo(() => {
+    const missing: string[] = [];
+    if (!person) missing.push("본인 사진");
+    if (needTop && !top) missing.push("상의 이미지");
+    if (needBottom && !bottom) missing.push("하의 이미지");
+    return missing.length ? `필요: ${missing.join(", ")}` : null;
+  }, [person, top, bottom, needTop, needBottom]);
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:py-12">
       <header className="flex items-start justify-between gap-4">
@@ -586,6 +594,9 @@ export default function Home() {
               : "생성 중... (30초~2분 소요)"
             : "피팅 생성"}
         </button>
+        {!loading && missingHint && (
+          <p className="text-center text-xs text-zinc-500">{missingHint}</p>
+        )}
         {error && (
           <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
             {error}
